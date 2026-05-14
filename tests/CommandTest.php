@@ -11,7 +11,7 @@ use Aimeos\Cms\Models\Page;
 use Aimeos\Cms\Models\File;
 use Aimeos\Prisma\Prisma;
 use Aimeos\Prisma\Responses\TextResponse;
-use Database\Seeders\CmsSeeder;
+use Database\Seeders\TestSeeder;
 use Prism\Prism\Facades\Prism;
 use Prism\Prism\Testing\TextResponseFake;
 
@@ -21,10 +21,10 @@ class AiCommandTest extends AiTestAbstract
     use CmsWithMigrations;
     use \Illuminate\Foundation\Testing\RefreshDatabase;
 
+    protected $seeder = TestSeeder::class;
+
     public function testDescription(): void
     {
-        $this->seed( CmsSeeder::class );
-
         Prism::fake( [
             TextResponseFake::make()->withText( 'Generated meta description' ),
             TextResponseFake::make()->withText( 'Generated meta description' ),
