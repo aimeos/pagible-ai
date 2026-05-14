@@ -53,31 +53,27 @@ final class Write
 
             if( !empty( $args['files'] ) )
             {
-                $disk = config( 'cms.disk', 'public' );
-
-                foreach( File::whereIn( 'id', $args['files'] )->select( 'id', 'path', 'mime' )->get() as $file )
-                {
-                    $type = explode( '/', $file->mime, 2 )[0];
+                $files = File::whereIn( 'id', $args['files'] )->select( 'id', 'path', 'mime' )->get()->map( function( $file ) {
 
                     if( str_starts_with( (string) $file->path, 'http' ) )
                     {
-                        $files[] = match( $type ) {
+                        return match( explode( '/', $file->mime )[0] ) {
                             'image' => Image::fromUrl( (string) $file->path ),
                             'audio' => Audio::fromUrl( (string) $file->path ),
                             'video' => Video::fromUrl( (string) $file->path ),
                             default => Document::fromUrl( (string) $file->path ),
                         };
                     }
-                    else
-                    {
-                        $files[] = match( $type ) {
-                            'image' => Image::fromStoragePath( (string) $file->path, $disk ),
-                            'audio' => Audio::fromStoragePath( (string) $file->path, $disk ),
-                            'video' => Video::fromStoragePath( (string) $file->path, $disk ),
-                            default => Document::fromStoragePath( (string) $file->path, $disk ),
-                        };
-                    }
-                }
+
+                    $disk = config( 'cms.disk', 'public' );
+
+                    return match( explode( '/', $file->mime )[0] ) {
+                        'image' => Image::fromStoragePath( (string) $file->path, $disk ),
+                        'audio' => Audio::fromStoragePath( (string) $file->path, $disk ),
+                        'video' => Video::fromStoragePath( (string) $file->path, $disk ),
+                        default => Document::fromStoragePath( (string) $file->path, $disk ),
+                    };
+                } )->values()->toArray();
             }
 
             $response = $prism->withPrompt( $args['prompt'], $files )->asText();

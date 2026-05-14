@@ -98,14 +98,14 @@ final class Refine
 
                 $m = [];
 
-                if( $entry['type'] === 'heading' && preg_match( '/^(#+)(.*)$/', (string) ($data['value'] ?? ''), $m ) )
+                if( $entry['type'] === 'heading' && preg_match( '/^(#+)(.*)$/', (string) @$data['value'], $m ) )
                 {
                     $entry['data'][$data['name']] = trim( $m[2] );
                     $entry['data']['level'] = (string) strlen( $m[1] );
                 }
                 else
                 {
-                    $entry['data'][$data['name']] = (string) ($data['value'] ?? '');
+                    $entry['data'][$data['name']] = (string) @$data['value'];
                 }
             }
 
@@ -124,7 +124,7 @@ final class Refine
      */
     protected function schema( string $type ) : ObjectSchema
     {
-        $types = array_keys( \Aimeos\Cms\Schema::schemas( section: $type ) );
+        $types = collect( (array) config( "cms.schemas.$type", [] ) )->keys()->all();
 
         return new ObjectSchema(
             name: 'response',

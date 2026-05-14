@@ -49,9 +49,7 @@ class RefineContent extends Tool
         ] );
 
         /** @var Page|null $page */
-        $page = Page::withTrashed()->select( 'id', 'content', 'latest_id' )
-            ->with( ['latest' => fn( $q ) => $q->select( 'id', 'versionable_id', 'aux' )] )
-            ->find( $validated['id'] );
+        $page = Page::withTrashed()->find( $validated['id'] );
 
         if( !$page ) {
             return Response::structured( ['error' => 'Page not found.'] );
@@ -64,7 +62,7 @@ class RefineContent extends Tool
         $model = config( 'cms.ai.refine.model' );
 
         $system = view( 'cms::prompts.refine' )->render();
-        $types = array_keys( \Aimeos\Cms\Schema::schemas( section: 'content' ) );
+        $types = collect( (array) config( 'cms.schemas.content', [] ) )->keys()->all();
 
         try
         {
@@ -125,14 +123,14 @@ class RefineContent extends Tool
 
                 $m = [];
 
-                if( $entry['type'] === 'heading' && preg_match( '/^(#+)(.*)$/', (string) ($data['value'] ?? ''), $m ) )
+                if( $entry['type'] === 'heading' && preg_match( '/^(#+)(.*)$/', (string) @$data['value'], $m ) )
                 {
                     $entry['data'][$data['name']] = trim( $m[2] );
                     $entry['data']['level'] = (string) strlen( $m[1] );
                 }
                 else
                 {
-                    $entry['data'][$data['name']] = (string) ($data['value'] ?? '');
+                    $entry['data'][$data['name']] = (string) @$data['value'];
                 }
             }
 
