@@ -68,7 +68,7 @@ class RefineContent extends Tool
         {
             $response = Prisma::text()->using( $provider, $config )
                 ->model( $model )
-                ->withMaxTokens( config( 'cms.ai.maxtoken', 32768 ) )
+                ->withMaxTokens( config( 'cms.ai.maxtoken' ) )
                 ->withSystemPrompt( $system . "\n" . ( $validated['context'] ?? '' ) )
                 ->withTools( [Tools::provider( 'web_search' ), Tools::provider( 'web_fetch' )] )
                 ->withClientOptions( [
