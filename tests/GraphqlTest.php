@@ -11,13 +11,11 @@ use Aimeos\Cms\Models\File;
 use Aimeos\Prisma\Prisma;
 use Aimeos\Prisma\Responses\FileResponse;
 use Aimeos\Prisma\Responses\TextResponse;
-use Database\Seeders\CmsSeeder;
+use Database\Seeders\TestSeeder;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Nuwave\Lighthouse\Testing\MakesGraphQLRequests;
 use Nuwave\Lighthouse\Testing\RefreshesSchemaCache;
-use Prism\Prism\Testing\TextResponseFake;
-use Prism\Prism\Facades\Prism;
 
 
 class GraphqlTest extends AiTestAbstract
@@ -27,24 +25,26 @@ class GraphqlTest extends AiTestAbstract
     use MakesGraphQLRequests;
     use RefreshesSchemaCache;
 
+    protected $seeder = TestSeeder::class;
 
-	protected function defineEnvironment( $app )
-	{
+
+    protected function defineEnvironment( $app )
+    {
         parent::defineEnvironment( $app );
 
-		$app['config']->set( 'lighthouse.schema_path', __DIR__ . '/default-schema.graphql' );
-		$app['config']->set( 'lighthouse.namespaces.models', ['App\Models', 'Aimeos\\Cms\\Models'] );
-		$app['config']->set( 'lighthouse.namespaces.mutations', ['Aimeos\\Cms\\GraphQL\\Mutations'] );
-		$app['config']->set( 'lighthouse.namespaces.directives', ['Aimeos\\Cms\\GraphQL\\Directives'] );
+        $app['config']->set( 'lighthouse.schema_path', __DIR__ . '/default-schema.graphql' );
+        $app['config']->set( 'lighthouse.namespaces.models', ['App\Models', 'Aimeos\\Cms\\Models'] );
+        $app['config']->set( 'lighthouse.namespaces.mutations', ['Aimeos\\Cms\\GraphQL\\Mutations'] );
+        $app['config']->set( 'lighthouse.namespaces.directives', ['Aimeos\\Cms\\GraphQL\\Directives'] );
     }
 
 
-	protected function getPackageProviders( $app )
-	{
-		return array_merge( parent::getPackageProviders( $app ), [
-			'Nuwave\Lighthouse\LighthouseServiceProvider'
-		] );
-	}
+    protected function getPackageProviders( $app )
+    {
+        return array_merge( parent::getPackageProviders( $app ), [
+            'Nuwave\Lighthouse\LighthouseServiceProvider'
+        ] );
+    }
 
 
     protected function setUp(): void
@@ -63,8 +63,6 @@ class GraphqlTest extends AiTestAbstract
 
     public function testDescribe()
     {
-        $this->seed( CmsSeeder::class );
-
         $file = File::firstOrFail();
         $expected = 'Description of the file content.';
         Prisma::fake( [TextResponse::fromText( $expected )] );
@@ -83,8 +81,6 @@ class GraphqlTest extends AiTestAbstract
 
     public function testImagine()
     {
-        $this->seed( CmsSeeder::class );
-
         $file = File::firstOrFail();
         $image = base64_encode( file_get_contents( __DIR__ . '/assets/image.png' ) );
         Prisma::fake( [FileResponse::fromBase64( $image, 'image/png' )] );
@@ -103,30 +99,14 @@ class GraphqlTest extends AiTestAbstract
 
     public function testSynthesize()
     {
-        $this->seed( CmsSeeder::class );
-
         $file = File::firstOrFail();
-        $fake = \Prism\Prism\Testing\TextResponseFake::make()
-            ->withSteps( collect( [
-                new \Prism\Prism\Text\Step(
-                    'text',
-                    \Prism\Prism\Enums\FinishReason::Stop,
-                    [
-                        new \Prism\Prism\ValueObjects\ToolCall( '1', 'summarize', ['text' => str_repeat( 'A', 80 )] ),
-                        new \Prism\Prism\ValueObjects\ToolCall( '2', 'classify', ['category' => 'example'] ),
-                    ],
-                    [],
-                    [],
-                    new \Prism\Prism\ValueObjects\Usage(0, 0),
-                    new \Prism\Prism\ValueObjects\Meta('fake', 'fake'),
-                    [],
-                    [],
-                    []
-                ),
-            ] ) )
-            ->withText('This is the generated response.');
+        $fake = TextResponse::fromText( 'This is the generated response.' )
+            ->withSteps( [
+                new \Aimeos\Prisma\Tools\Step( '1', 'summarize', ['text' => str_repeat( 'A', 80 )] ),
+                new \Aimeos\Prisma\Tools\Step( '2', 'classify', ['category' => 'example'] ),
+            ] );
 
-        Prism::fake([$fake]);
+        Prisma::fake( [$fake] );
 
         $response = $this->actingAs($this->user)->graphQL('
             mutation($prompt: String!, $context: String, $files: [String!]) {
@@ -200,11 +180,9 @@ class GraphqlTest extends AiTestAbstract
 
     public function testWrite()
     {
-        $this->seed( CmsSeeder::class );
-
         $file = File::firstOrFail();
         $expected = 'Generated content based on the prompt.';
-        Prism::fake( [TextResponseFake::make()->withText( $expected )] );
+        Prisma::fake( [TextResponse::fromText( $expected )] );
 
         $response = $this->actingAs( $this->user )->graphQL( "
             mutation {
@@ -220,8 +198,6 @@ class GraphqlTest extends AiTestAbstract
 
     public function testDescribeNoPermission()
     {
-        $this->seed( CmsSeeder::class );
-
         $user = new \App\Models\User( [
             'name' => 'No permission',
             'email' => 'noperm@testbench',
