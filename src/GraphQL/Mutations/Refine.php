@@ -8,10 +8,13 @@
 namespace Aimeos\Cms\GraphQL\Mutations;
 
 use Aimeos\Cms\Utils;
-use Aimeos\Prisma\Prisma;
-use Aimeos\Prisma\Schema\Schema;
-use Aimeos\Prisma\Tools;
-use Aimeos\Prisma\Exceptions\PrismaException;
+use Aimeos\Cms\Models\File;
+use Prism\Prism\Facades\Prism;
+use Prism\Prism\Schema\EnumSchema;
+use Prism\Prism\Schema\ArraySchema;
+use Prism\Prism\Schema\ObjectSchema;
+use Prism\Prism\Schema\StringSchema;
+use Prism\Prism\Exceptions\PrismException;
 use Illuminate\Support\Facades\Log;
 use GraphQL\Error\Error;
 
@@ -39,27 +42,25 @@ final class Refine
 
         try
         {
-            $response = Prisma::text()->using( $provider, $config )
-                ->model( $model )
-                ->withMaxTokens( config( 'cms.ai.maxtoken' ) )
+            $response = Prism::structured()->using( $provider, $model, $config )
+                ->withMaxTokens( config( 'cms.ai.maxtoken', 32768 ) )
                 ->withSystemPrompt( $system . "\n" . ($args['context'] ?? '') )
-                ->withTools( [Tools::provider( 'web_search' ), Tools::provider( 'web_fetch' )] )
+                ->withPrompt( $args['prompt'] . "\n\nContent as JSON:\n" . json_encode( $content ) )
+                ->withProviderOptions( ['use_tool_calling' => true] )
+                ->withSchema( $this->schema( $type ) )
                 ->withClientOptions( [
                     'timeout' => 180,
                     'connect_timeout' => 10,
                 ] )
-                ->ensure( 'structure' )
-                ->structure( $args['prompt'] . "\n\nContent as JSON:\n" . json_encode( $content ), $this->schema( $type ) ); // @phpstan-ignore-line method.notFound
+                ->asStructured();
 
-            $structured = $response->structured();
-
-            if( !$structured ) {
+            if( !$response->structured ) {
                 throw new Error( 'Invalid content in refine response' );
             }
 
-            return $this->merge( $content, $structured['contents'] ?? [] );
+            return $this->merge( $content, $response->structured['contents'] ?? [] );
         }
-        catch( PrismaException $e )
+        catch( PrismException $e )
         {
             Log::error( 'AI service error', ['mutation' => 'Refine', 'message' => $e->getMessage(), 'trace' => $e->getTraceAsString()] );
             throw new Error( config( 'app.debug' ) ? $e->getMessage() : 'AI service error', null, null, null, null, $e );
@@ -97,14 +98,14 @@ final class Refine
 
                 $m = [];
 
-                if( $entry['type'] === 'heading' && preg_match( '/^(#+)(.*)$/', (string) ($data['value'] ?? ''), $m ) )
+                if( $entry['type'] === 'heading' && preg_match( '/^(#+)(.*)$/', (string) @$data['value'], $m ) )
                 {
                     $entry['data'][$data['name']] = trim( $m[2] );
                     $entry['data']['level'] = (string) strlen( $m[1] );
                 }
                 else
                 {
-                    $entry['data'][$data['name']] = (string) ($data['value'] ?? '');
+                    $entry['data'][$data['name']] = (string) @$data['value'];
                 }
             }
 
@@ -119,25 +120,44 @@ final class Refine
      * Returns the schema for the content elements
      *
      * @param string $type The type of content elements
-     * @return Schema The schema for the content elements
+     * @return ObjectSchema The schema for the content elements
      */
-    protected function schema( string $type ) : Schema
+    protected function schema( string $type ) : ObjectSchema
     {
-        $types = array_keys( \Aimeos\Cms\Schema::schemas( section: $type ) );
+        $types = collect( (array) config( "cms.schemas.$type", [] ) )->keys()->all();
 
-        return Schema::for( 'response', [
-            'contents' => Schema::array()->description( 'List of page content elements' )->required()->items(
-                Schema::object( [
-                    'id' => Schema::string()->description( 'The ID of the content element' )->nullable()->required(),
-                    'type' => Schema::string()->description( 'The type of the content element' )->enum( $types )->required(),
-                    'data' => Schema::array()->description( 'List of texts for the content element' )->required()->items(
-                        Schema::object( [
-                            'name' => Schema::string()->description( 'Name of the text element' )->enum( ['title', 'text'] )->required(),
-                            'value' => Schema::string()->description( 'Plain title, markdown text or source code text' )->required(),
-                        ] )
-                    ),
-                ] )
-            ),
-        ] );
+        return new ObjectSchema(
+            name: 'response',
+            description: 'The content response',
+            properties: [
+                new ArraySchema(
+                    name: 'contents',
+                    description: 'List of page content elements',
+                    items: new ObjectSchema(
+                        name: 'content',
+                        description: 'A content element',
+                        properties: [
+                            new StringSchema( 'id', 'The ID of the content element', nullable: true ),
+                            new EnumSchema( 'type', 'The type of the content element', options: $types ),
+                            new ArraySchema(
+                                name: 'data',
+                                description: 'List of texts for the content element',
+                                items: new ObjectSchema(
+                                    name: 'text',
+                                    description: 'A text of the content element',
+                                    properties: [
+                                        new EnumSchema( 'name', 'Name of the text element', options: ['title', 'text'] ),
+                                        new StringSchema( 'value', 'Plain title, markdown text or source code text' ),
+                                    ],
+                                    requiredFields: ['name', 'value']
+                                )
+                            )
+                        ],
+                        requiredFields: ['id', 'type', 'data']
+                    )
+                )
+            ],
+            requiredFields: ['contents']
+        );
     }
 }

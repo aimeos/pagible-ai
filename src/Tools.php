@@ -7,8 +7,7 @@
 
 namespace Aimeos\Cms;
 
-use Aimeos\Prisma\Tools as PrismaTools;
-use Illuminate\Container\Container;
+use Prism\Prism\Facades\Tool;
 
 
 class Tools
@@ -16,14 +15,14 @@ class Tools
     /**
      * Returns the available tools.
      *
-     * @return array<int, \Aimeos\Prisma\Tools\Adapter\Adapter>
+     * @return array<int, mixed>
      */
     public static function get(): array
     {
         return [
-            PrismaTools::laravel( Container::getInstance()->make( Tools\SearchPages::class ) ),
-            PrismaTools::laravel( Container::getInstance()->make( Tools\GetLocales::class ) ),
-            PrismaTools::laravel( Container::getInstance()->make( Tools\AddPage::class ) ),
+            Tool::make( Tools\SearchPages::class ),
+            Tool::make( Tools\GetLocales::class ),
+            Tool::make( Tools\AddPage::class ),
         ];
     }
 }

@@ -13,6 +13,8 @@ use Aimeos\Prisma\Responses\TextResponse;
 use Illuminate\Http\UploadedFile;
 use Nuwave\Lighthouse\Testing\MakesGraphQLRequests;
 use Nuwave\Lighthouse\Testing\RefreshesSchemaCache;
+use Prism\Prism\Testing\TextResponseFake;
+use Prism\Prism\Facades\Prism;
 
 
 class GraphqlAiTest extends AiTestAbstract
@@ -141,8 +143,8 @@ class GraphqlAiTest extends AiTestAbstract
 
     public function testRefine()
     {
-        Prisma::fake( [
-            TextResponse::fromText( '' )->withStructured( [
+        Prism::fake( [
+            \Prism\Prism\Testing\StructuredResponseFake::make()->withStructured( [
                 'contents' => [[
                     'id' => 'content-1',
                     'type' => 'text',
