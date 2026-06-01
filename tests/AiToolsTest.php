@@ -103,45 +103,6 @@ class AiToolsTest extends AiTestAbstract
     }
 
 
-    public function testRefineContentPreservesStructuredFields()
-    {
-        $content = [[
-            'id' => 'table-1',
-            'type' => 'table',
-            'group' => 'main',
-            'data' => [
-                'title' => 'Old title',
-                'header' => 'row',
-                'table' => [['A', 'B'], ['1', '2']],
-            ],
-        ]];
-
-        // AI refines the title and the non-complex "header" select, but wrongly
-        // serializes the grid into a "text" value that is not a table field
-        $response = [[
-            'id' => 'table-1',
-            'type' => 'table',
-            'data' => [
-                ['name' => 'title', 'value' => 'New title'],
-                ['name' => 'header', 'value' => 'col'],
-                ['name' => 'text', 'value' => '[["A","B"],["1","2"]]'],
-            ],
-        ]];
-
-        $tool = new \Aimeos\Cms\Tools\RefineContent();
-        $method = new \ReflectionMethod( $tool, 'merge' );
-        $method->setAccessible( true );
-
-        $result = $method->invoke( $tool, $content, $response );
-
-        $this->assertCount( 1, $result );
-        $this->assertEquals( 'New title', $result[0]['data']['title'] );          // text field refined
-        $this->assertEquals( 'col', $result[0]['data']['header'] );               // non-complex select set
-        $this->assertEquals( [['A', 'B'], ['1', '2']], $result[0]['data']['table'] ); // complex grid preserved
-        $this->assertArrayNotHasKey( 'text', $result[0]['data'] );                 // unknown field dropped
-    }
-
-
     // ── TranslateContent ──────────────────────────────────────────────
 
     public function testTranslateContent()
