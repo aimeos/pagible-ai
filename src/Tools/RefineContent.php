@@ -29,6 +29,15 @@ use Laravel\Mcp\Request;
 class RefineContent extends Tool
 {
     /**
+     * Field types the AI must not set because their value is structured
+     * (grids, item lists, file references) or machine-managed (hidden defaults).
+     *
+     * @var array<string>
+     */
+    private const COMPLEX_FIELDS = ['table', 'items', 'images', 'image', 'video', 'audio', 'file', 'media', 'hidden'];
+
+
+    /**
      * Handle the tool request.
      */
     public function handle( Request $request ): \Laravel\Mcp\ResponseFactory
@@ -106,6 +115,7 @@ class RefineContent extends Tool
     {
         $result = [];
         $map = collect( $content )->keyBy( 'id' );
+        $schemas = \Aimeos\Cms\Schema::schemas( section: 'content' );
 
         foreach( $response as $item )
         {
@@ -117,23 +127,22 @@ class RefineContent extends Tool
                 $entry['id'] = Utils::uid();
             }
 
+            $fields = $schemas[$entry['type']]['fields'] ?? [];
+
             foreach( $item['data'] ?? [] as $data )
             {
-                if( empty( $data['name'] ) ) {
+                $name = $data['name'] ?? '';
+
+                // Allow any non-complex field defined for this element type. Complex
+                // fields (table grid, file references, ...) are preserved as-is so the AI
+                // can't serialize them into a value or blank them out.
+                if( empty( $name ) || empty( $fields[$name] )
+                    || in_array( $fields[$name]['type'] ?? 'string', self::COMPLEX_FIELDS, true )
+                ) {
                     continue;
                 }
 
-                $m = [];
-
-                if( $entry['type'] === 'heading' && preg_match( '/^(#+)(.*)$/', (string) ($data['value'] ?? ''), $m ) )
-                {
-                    $entry['data'][$data['name']] = trim( $m[2] );
-                    $entry['data']['level'] = (string) strlen( $m[1] );
-                }
-                else
-                {
-                    $entry['data'][$data['name']] = (string) ($data['value'] ?? '');
-                }
+                $entry['data'][$name] = (string) ($data['value'] ?? '');
             }
 
             $result[] = $entry;
@@ -156,10 +165,10 @@ class RefineContent extends Tool
                 Schema::object( [
                     'id' => Schema::string()->description( 'The ID of the content element' )->nullable()->required(),
                     'type' => Schema::string()->description( 'The type of the content element' )->enum( $types )->required(),
-                    'data' => Schema::array()->description( 'List of texts for the content element' )->required()->items(
+                    'data' => Schema::array()->description( 'List of field name/value pairs for the content element' )->required()->items(
                         Schema::object( [
-                            'name' => Schema::string()->description( 'Name of the text element' )->enum( ['title', 'text'] )->required(),
-                            'value' => Schema::string()->description( 'Plain title, markdown text or source code text' )->required(),
+                            'name' => Schema::string()->description( 'Name of the data field to set, e.g. "title", "text", "level", "header" or "language"' )->required(),
+                            'value' => Schema::string()->description( 'Field value as plain string: title, markdown text, source code, or a scalar option, number or boolean' )->required(),
                         ] )
                     ),
                 ] )
