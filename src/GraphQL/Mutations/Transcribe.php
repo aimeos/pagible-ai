@@ -7,7 +7,6 @@
 
 namespace Aimeos\Cms\GraphQL\Mutations;
 
-use Aimeos\Cms\Utils;
 use Aimeos\Prisma\Prisma;
 use Aimeos\Prisma\Files\Audio;
 use Aimeos\Prisma\Exceptions\PrismaException;
@@ -47,8 +46,8 @@ final class Transcribe
                 ->structured();
 
             return array_map( fn( $entry ) => [
-                'start' => Utils::formatSeconds( $entry['start'] ),
-                'end' => Utils::formatSeconds( $entry['end'] ),
+                'start' => $this->time( $entry['start'] ),
+                'end' => $this->time( $entry['end'] ),
                 'text' => $entry['text'],
             ], $data );
         }
@@ -57,5 +56,22 @@ final class Transcribe
             Log::error( 'AI service error', ['mutation' => 'Transcribe', 'message' => $e->getMessage(), 'trace' => $e->getTraceAsString()] );
             throw new Error( config( 'app.debug' ) ? $e->getMessage() : 'AI service error', null, null, null, null, $e );
         }
+    }
+
+
+    /**
+     * Formats the given time in seconds to a string in the format "HH:MM:SS.mmm"
+     *
+     * @param float $seconds Time in seconds
+     * @return string Formatted time string
+     */
+    protected function time( float $seconds ) : string
+    {
+        $hours = floor( $seconds / 3600 );
+        $minutes = floor( ( $seconds % 3600 ) / 60 );
+        $secs = floor( $seconds % 60 );
+        $millis = ( $seconds - floor( $seconds ) ) * 1000;
+
+        return sprintf( "%02d:%02d:%02d.%03d", $hours, $minutes, $secs, $millis );
     }
 }
