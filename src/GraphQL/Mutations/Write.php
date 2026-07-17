@@ -1,14 +1,15 @@
 <?php
 
 /**
- * @license LGPL, https://opensource.org/license/lgpl-3-0
+ * @license MIT, https://opensource.org/license/mit
  */
 
 
 namespace Aimeos\Cms\GraphQL\Mutations;
 
-use Aimeos\Cms\Models\File;
+use Aimeos\Cms\Concerns\ObservesPrisma;
 use Aimeos\Prisma\Prisma;
+use Aimeos\Cms\Models\File;
 use Aimeos\Prisma\Tools;
 use Aimeos\Prisma\Exceptions\PrismaException;
 use Illuminate\Support\Facades\Log;
@@ -17,6 +18,9 @@ use GraphQL\Error\Error;
 
 final class Write
 {
+    use ObservesPrisma;
+
+
     /**
      * @param  null  $rootValue
      * @param  array<string, mixed>  $args
@@ -34,6 +38,8 @@ final class Write
 
         try
         {
+            set_time_limit( (int) config( 'cms.ai.timeout' ) ); // long AI call; lift PHP's default 30s execution limit
+
             $system = view( 'cms::prompts.write' )->render() . "\n" . ( $args['context'] ?? '' );
 
             if( !empty( $args['files'] ) )
@@ -48,7 +54,7 @@ final class Write
                 }
             }
 
-            return Prisma::text()
+            return Prisma::text()->observe( $this->observer() )
                 ->using( $provider, $config )
                 ->model( $model )
                 ->withMaxTokens( config( 'cms.ai.maxtoken' ) )
@@ -61,7 +67,7 @@ final class Write
         catch( PrismaException $e )
         {
             Log::error( 'AI service error', ['mutation' => 'Write', 'message' => $e->getMessage(), 'trace' => $e->getTraceAsString()] );
-            throw new Error( config( 'app.debug' ) ? $e->getMessage() : 'AI service error', null, null, null, null, $e );
+            throw new Error( $e->getMessage(), null, null, null, null, $e );
         }
     }
 }

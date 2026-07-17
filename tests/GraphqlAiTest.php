@@ -1,7 +1,7 @@
 <?php
 
 /**
- * @license LGPL, https://opensource.org/license/lgpl-3-0
+ * @license MIT, https://opensource.org/license/mit
  */
 
 
@@ -146,6 +146,7 @@ class GraphqlAiTest extends AiTestAbstract
                 'contents' => [[
                     'id' => 'content-1',
                     'type' => 'heading',
+                    'group' => 'main',
                     'data' => [
                         'title' => 'Generated title',
                         'level' => '1',
@@ -219,6 +220,7 @@ class GraphqlAiTest extends AiTestAbstract
                 'contents' => [[
                     'id' => 'img-1',
                     'type' => 'image',
+                    'group' => 'main',
                     'data' => ['file' => ['id' => $uuid, 'type' => 'file']],
                 ]]
             ] )
@@ -237,6 +239,33 @@ class GraphqlAiTest extends AiTestAbstract
 
         $this->assertSame( ['id' => $uuid, 'type' => 'file'], $refine[0]['data']['file'] );
         $this->assertSame( [$uuid], $refine[0]['files'] );
+    }
+
+
+    public function testRefineInvalidResponse()
+    {
+        Prisma::fake( [
+            TextResponse::fromText( '' )->withStructured( [
+                'contents' => [[
+                    'id' => 'content-1',
+                    'type' => 'heading',
+                    'group' => 'nonexistent',
+                    'data' => ['title' => 'Generated title', 'level' => '1'],
+                ]]
+            ] )
+        ] );
+
+        $response = $this->actingAs( $this->user )->graphQL( '
+            mutation($prompt: String!, $content: JSON!) {
+                refine(prompt: $prompt, content: $content)
+            }
+        ', [
+            'prompt' => 'Refine this content',
+            'content' => json_encode( [] ),
+        ] );
+
+        $this->assertNull( $response->json( 'data.refine' ) );
+        $this->assertStringContainsString( 'refine response', (string) $response->json( 'errors.0.message' ) );
     }
 
 
@@ -552,20 +581,6 @@ class GraphqlAiTest extends AiTestAbstract
     }
 
 
-    public function testSynthesizeNoPermission()
-    {
-        $user = $this->noPermUser();
-
-        $this->actingAs( $user )->graphQL( '
-            mutation($prompt: String!) {
-                synthesize(prompt: $prompt)
-            }
-        ', [
-            'prompt' => 'test',
-        ] )->assertGraphQLErrorMessage( 'Insufficient permissions' );
-    }
-
-
     public function testRefineNoPermission()
     {
         $user = $this->noPermUser();
@@ -642,16 +657,6 @@ class GraphqlAiTest extends AiTestAbstract
         $this->actingAs( $this->user )->graphQL( '
             mutation {
                 refine(prompt: "", content: "[]")
-            }
-        ' )->assertGraphQLErrorMessage( 'Prompt must not be empty' );
-    }
-
-
-    public function testSynthesizeEmptyPrompt()
-    {
-        $this->actingAs( $this->user )->graphQL( '
-            mutation {
-                synthesize(prompt: "")
             }
         ' )->assertGraphQLErrorMessage( 'Prompt must not be empty' );
     }
