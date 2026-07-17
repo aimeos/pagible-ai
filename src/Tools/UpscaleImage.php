@@ -1,16 +1,14 @@
 <?php
 
 /**
- * @license MIT, https://opensource.org/license/mit
+ * @license LGPL, https://opensource.org/license/lgpl-3-0
  */
 
 
 namespace Aimeos\Cms\Tools;
 
-use Aimeos\Cms\Concerns\ObservesPrisma;
-use Aimeos\Prisma\Prisma;
 use Aimeos\Cms\Permission;
-use Aimeos\Cms\Utils;
+use Aimeos\Prisma\Prisma;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Attributes\Name;
@@ -26,7 +24,6 @@ use Laravel\Mcp\Request;
 class UpscaleImage extends Tool
 {
     use HandlesMedia;
-    use ObservesPrisma;
 
 
     /**
@@ -55,7 +52,7 @@ class UpscaleImage extends Tool
         $config = config( 'cms.ai.upscale', [] );
         $model = config( 'cms.ai.upscale.model' );
 
-        $base64 = Prisma::image()->observe( $this->observer( Utils::editor( $request->user() ) ) )
+        $base64 = Prisma::image()
             ->using( $provider, $config )
             ->model( $model )
             ->ensure( 'upscale' )

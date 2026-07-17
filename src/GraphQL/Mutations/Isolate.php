@@ -1,13 +1,12 @@
 <?php
 
 /**
- * @license MIT, https://opensource.org/license/mit
+ * @license LGPL, https://opensource.org/license/lgpl-3-0
  */
 
 
 namespace Aimeos\Cms\GraphQL\Mutations;
 
-use Aimeos\Cms\Concerns\ObservesPrisma;
 use Aimeos\Prisma\Prisma;
 use Aimeos\Prisma\Files\Image;
 use Aimeos\Prisma\Exceptions\PrismaException;
@@ -18,9 +17,6 @@ use GraphQL\Error\Error;
 
 final class Isolate
 {
-    use ObservesPrisma;
-
-
     /**
      * @param  null  $rootValue
      * @param  array<string, mixed>  $args
@@ -41,7 +37,7 @@ final class Isolate
         {
             $file = Image::fromBinary( $upload->getContent(), $upload->getClientMimeType() );
 
-            return Prisma::image()->observe( $this->observer() )
+            return Prisma::image()
                 ->using( $provider, $config )
                 ->model( $model )
                 ->ensure( 'isolate' )
@@ -51,7 +47,7 @@ final class Isolate
         catch( PrismaException $e )
         {
             Log::error( 'AI service error', ['mutation' => 'Isolate', 'message' => $e->getMessage(), 'trace' => $e->getTraceAsString()] );
-            throw new Error( $e->getMessage(), null, null, null, null, $e );
+            throw new Error( config( 'app.debug' ) ? $e->getMessage() : 'AI service error', null, null, null, null, $e );
         }
     }
 }

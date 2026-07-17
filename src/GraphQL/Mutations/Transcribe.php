@@ -1,15 +1,14 @@
 <?php
 
 /**
- * @license MIT, https://opensource.org/license/mit
+ * @license LGPL, https://opensource.org/license/lgpl-3-0
  */
 
 
 namespace Aimeos\Cms\GraphQL\Mutations;
 
-use Aimeos\Cms\Concerns\ObservesPrisma;
-use Aimeos\Prisma\Prisma;
 use Aimeos\Cms\Utils;
+use Aimeos\Prisma\Prisma;
 use Aimeos\Prisma\Files\Audio;
 use Aimeos\Prisma\Exceptions\PrismaException;
 use Illuminate\Support\Facades\Log;
@@ -19,9 +18,6 @@ use GraphQL\Error\Error;
 
 final class Transcribe
 {
-    use ObservesPrisma;
-
-
     /**
      * @param null $rootValue
      * @param array<string, mixed> $args
@@ -43,7 +39,7 @@ final class Transcribe
         {
             $file = Audio::fromBinary( $upload->getContent(), $upload->getClientMimeType() );
 
-            $data = Prisma::audio()->observe( $this->observer() )
+            $data = Prisma::audio()
                 ->using( $provider, $config )
                 ->model( $model )
                 ->ensure( 'transcribe' )
@@ -59,7 +55,7 @@ final class Transcribe
         catch( PrismaException $e )
         {
             Log::error( 'AI service error', ['mutation' => 'Transcribe', 'message' => $e->getMessage(), 'trace' => $e->getTraceAsString()] );
-            throw new Error( $e->getMessage(), null, null, null, null, $e );
+            throw new Error( config( 'app.debug' ) ? $e->getMessage() : 'AI service error', null, null, null, null, $e );
         }
     }
 }

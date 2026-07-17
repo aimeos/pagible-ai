@@ -1,17 +1,15 @@
 <?php
 
 /**
- * @license MIT, https://opensource.org/license/mit
+ * @license LGPL, https://opensource.org/license/lgpl-3-0
  */
 
 
 namespace Aimeos\Cms\Tools;
 
-use Aimeos\Cms\Concerns\ObservesPrisma;
-use Aimeos\Prisma\Prisma;
 use Aimeos\Cms\Permission;
 use Aimeos\Cms\Models\File;
-use Aimeos\Cms\Utils;
+use Aimeos\Prisma\Prisma;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 use Laravel\Mcp\Server\Attributes\Description;
@@ -28,9 +26,6 @@ use Laravel\Mcp\Request;
 #[Description('Generates a textual description/summary of an image, audio or video file using AI. Useful for alt texts, captions or content summaries. Returns the description as text.')]
 class DescribeFile extends Tool
 {
-    use ObservesPrisma;
-
-
     /**
      * Handle the tool request.
      */
@@ -71,7 +66,7 @@ class DescribeFile extends Tool
             $doc = $class::fromStoragePath( (string) $file->path, config( 'cms.disk', 'public' ), $file->mime );
         }
 
-        $text = Prisma::type( $type )->observe( $this->observer( Utils::editor( $request->user() ) ) )
+        $text = Prisma::type( $type )
             ->using( $provider, $config )
             ->model( $model )
             ->ensure( 'describe' )

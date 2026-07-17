@@ -2,10 +2,6 @@
 
 namespace Aimeos\Cms;
 
-use Aimeos\Cms\Events\Generated;
-use Aimeos\Cms\Listeners\AiLogListener;
-use Illuminate\Cache\RateLimiting\Limit;
-use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider as Provider;
 
 class AiServiceProvider extends Provider
@@ -15,14 +11,12 @@ class AiServiceProvider extends Provider
         $basedir = dirname( __DIR__ );
 
         $this->loadViewsFrom( $basedir . '/views', 'cms' );
-        $this->loadRoutesFrom( $basedir . '/routes/ai.php' );
-        $this->rateLimiter();
 
         $this->publishes( [$basedir . '/config/cms/ai.php' => config_path( 'cms/ai.php' )], 'cms-config' );
         $this->publishes( [$basedir . '/graphql/cms-ai.graphql' => base_path( 'graphql/cms-ai.graphql' )], 'cms-graphql' );
 
         \Aimeos\Cms\Permission::register( [
-            'page:chat',
+            'page:synthesize',
             'page:refine',
             'file:describe',
             'audio:transcribe',
@@ -54,27 +48,12 @@ class AiServiceProvider extends Provider
             ] );
         }
 
-        $this->watch();
         $this->console();
     }
 
     public function register()
     {
         $this->mergeConfigFrom( dirname( __DIR__ ) . '/config/cms/ai.php', 'cms.ai' );
-    }
-
-    protected function rateLimiter(): void
-    {
-        RateLimiter::for( 'cms-ai', fn( $request ) =>
-            Limit::perMinute( 10 )->by( $request->user()?->getAuthIdentifier() ?: $request->ip() )
-        );
-    }
-
-    protected function watch() : void
-    {
-        Watch::listen( [
-            Generated::class => AiLogListener::class,
-        ] );
     }
 
     protected function console() : void

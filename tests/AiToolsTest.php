@@ -1,7 +1,7 @@
 <?php
 
 /**
- * @license MIT, https://opensource.org/license/mit
+ * @license LGPL, https://opensource.org/license/lgpl-3-0
  */
 
 
@@ -58,7 +58,6 @@ class AiToolsTest extends AiTestAbstract
                 'contents' => [[
                     'id' => 'content-1',
                     'type' => 'text',
-                    'group' => 'main',
                     'data' => [
                         'text' => 'Refined text',
                     ]

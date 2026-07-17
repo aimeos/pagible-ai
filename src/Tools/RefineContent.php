@@ -1,18 +1,16 @@
 <?php
 
 /**
- * @license MIT, https://opensource.org/license/mit
+ * @license LGPL, https://opensource.org/license/lgpl-3-0
  */
 
 
 namespace Aimeos\Cms\Tools;
 
-use Aimeos\Cms\Concerns\ObservesPrisma;
-use Aimeos\Prisma\Prisma;
 use Aimeos\Cms\Permission;
 use Aimeos\Cms\Models\Page;
 use Aimeos\Cms\Refiner;
-use Aimeos\Cms\Utils;
+use Aimeos\Prisma\Prisma;
 use Aimeos\Prisma\Tools;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Server\Attributes\Description;
@@ -28,9 +26,6 @@ use Laravel\Mcp\Request;
 #[Description('Improves or restructures existing page content using AI based on a prompt. Pass the page ID and a prompt describing the changes. Returns the refined content elements as a JSON array.')]
 class RefineContent extends Tool
 {
-    use ObservesPrisma;
-
-
     /**
      * Handle the tool request.
      */
@@ -66,25 +61,21 @@ class RefineContent extends Tool
         $model = config( 'cms.ai.refine.model' );
 
         $system = view( 'cms::prompts.refine' )->render();
-        $schema = \Aimeos\Prisma\Schema\Schema::fromArray( 'response', \Aimeos\Cms\JsonSchema::build( 'content', $page->type ) );
 
-        set_time_limit( (int) config( 'cms.ai.timeout' ) ); // long AI call; lift PHP's default 30s execution limit
-
-        $response = Prisma::text()->observe( $this->observer( Utils::editor( $request->user() ) ) )
-            ->using( $provider, $config )
+        $response = Prisma::text()->using( $provider, $config )
             ->model( $model )
             ->withMaxTokens( config( 'cms.ai.maxtoken' ) )
             ->withSystemPrompt( $system . "\n" . ( $validated['context'] ?? '' ) . ( !empty( $validated['lang'] ) ? "\nWrite the content in language: " . $validated['lang'] : '' ) )
             ->withClientOptions( [
-                'timeout' => (int) config( 'cms.ai.timeout' ),
+                'timeout' => 180,
                 'connect_timeout' => 10,
             ] )
             ->ensure( 'structure' )
-            ->structure( $validated['prompt'] . "\n\nContent as JSON:\n" . json_encode( $content ), $schema, [], ['mode' => 'json'] ); // @phpstan-ignore-line method.notFound
+            ->structure( $validated['prompt'] . "\n\nContent as JSON:\n" . json_encode( $content ), \Aimeos\Prisma\Schema\Schema::fromArray( 'response', \Aimeos\Cms\JsonSchema::build( 'content', $page->type ) ) ); // @phpstan-ignore-line method.notFound
 
         $structured = $response->structured();
 
-        if( !$structured || $schema->validate( $structured ) ) {
+        if( !$structured ) {
             return Response::structured( ['error' => 'Invalid content in refine response.'] );
         }
 

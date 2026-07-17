@@ -1,18 +1,17 @@
 <?php
 
 /**
- * @license MIT, https://opensource.org/license/mit
+ * @license LGPL, https://opensource.org/license/lgpl-3-0
  */
 
 
 namespace Aimeos\Cms\GraphQL\Mutations;
 
-use Aimeos\Cms\Concerns\ObservesPrisma;
-use Aimeos\Prisma\Prisma;
 use Aimeos\Cms\JsonSchema;
 use Aimeos\Cms\Refiner;
 use Aimeos\Cms\Tools as CmsTools;
 use Aimeos\Cms\Validation;
+use Aimeos\Prisma\Prisma;
 use Aimeos\Prisma\Schema\Schema;
 use Aimeos\Prisma\Tools;
 use Aimeos\Prisma\Exceptions\PrismaException;
@@ -22,9 +21,6 @@ use GraphQL\Error\Error;
 
 final class Refine
 {
-    use ObservesPrisma;
-
-
     /**
      * @param  null  $rootValue
      * @param  array<string, mixed>  $args
@@ -46,39 +42,20 @@ final class Refine
 
         try
         {
-            set_time_limit( (int) config( 'cms.ai.timeout' ) ); // long AI call; lift PHP's default 30s execution limit (matches client timeout)
-
-            $schema = Schema::fromArray( 'response', JsonSchema::build( $type, $args['pagetype'] ?? null ) );
-            $response = Prisma::text()->observe( $this->observer() )
-                ->using( $provider, $config )
+            $response = Prisma::text()->using( $provider, $config )
                 ->model( $model )
-                ->withClientOptions( ['timeout' => (int) config( 'cms.ai.timeout' )] )
+                ->withClientOptions( ['timeout' => 300] )
                 ->withMaxTokens( config( 'cms.ai.maxtoken' ) )
                 ->withSystemPrompt( $system . "\n" . ($args['context'] ?? '') . ( !empty( $args['lang'] ) ? "\nWrite the content in language: " . $args['lang'] : '' ) )
                 ->withTools( [
-                    Tools::laravel( CmsTools\GetPage::class ),
-                    Tools::laravel( CmsTools\GetPageHistory::class ),
-                    Tools::laravel( CmsTools\GetPageMetrics::class ),
-                    Tools::laravel( CmsTools\GetPageTree::class ),
-                    Tools::laravel( CmsTools\SearchPages::class ),
-
-                    Tools::laravel( CmsTools\AddElement::class ),
-                    Tools::laravel( CmsTools\DropElement::class ),
-                    Tools::laravel( CmsTools\GetElement::class ),
-                    Tools::laravel( CmsTools\RestoreElement::class ),
-                    Tools::laravel( CmsTools\SaveElement::class ),
-
-                    Tools::laravel( CmsTools\AddFile::class ),
-                    Tools::laravel( CmsTools\DropFile::class ),
-                    Tools::laravel( CmsTools\GetFile::class ),
-                    Tools::laravel( CmsTools\RestoreFile::class ),
-                    Tools::laravel( CmsTools\SaveFile::class ),
-
+                    Tools::laravel( CmsTools\GetPage::class )->max( 1 ),
+                    Tools::laravel( CmsTools\GetPageTree::class )->max( 1 ),
+                    Tools::laravel( CmsTools\SearchPages::class )->max( 3 ),
                     Tools::provider( 'web_search' ),
                     Tools::provider( 'web_fetch' )
                 ] )
                 ->ensure( 'structure' )
-                ->structure( $args['prompt'] . "\n\nContent as JSON:\n" . json_encode( $content ), $schema, [], ['mode' => 'json'] ); // @phpstan-ignore-line method.notFound
+                ->structure( $args['prompt'] . "\n\nContent as JSON:\n" . json_encode( $content ), Schema::fromArray( 'response', JsonSchema::build( $type, $args['pagetype'] ?? null ) ) ); // @phpstan-ignore-line method.notFound
 
             $structured = $response->structured();
 
@@ -86,27 +63,18 @@ final class Refine
                 throw new Error( 'No structured content returned in refine response' );
             }
 
-            if( $errors = $schema->validate( $structured ) ) {
-                Log::warning( 'Invalid refine response', ['mutation' => 'Refine', 'errors' => $errors] );
-                throw new Error( config( 'app.debug' ) ? 'Invalid refine response: ' . implode( '; ', $errors ) : 'Invalid content in refine response' );
-            }
-
             if( $type !== 'content' )
             {
-                $items = (array) $content;
+                $items = [];
 
                 foreach( $structured as $key => $data )
                 {
                     if( is_array( $data ) ) {
-                        $items[$key] = Validation::entry(
-                            $key,
-                            array_filter( $data, fn( $v ) => $v !== null ),
-                            $type,
-                        );
+                        $items[$key] = array_filter( $data, fn( $v ) => $v !== null );
                     }
                 }
 
-                return (array) Validation::structured( $items, $type );
+                return (array) Validation::structured( $items, $type, $content, $args['pagetype'] ?? null );
             }
 
             return Refiner::merge( $content, $structured['contents'] ?? [], $args['pagetype'] ?? null );
@@ -114,7 +82,7 @@ final class Refine
         catch( PrismaException $e )
         {
             Log::error( 'AI service error', ['mutation' => 'Refine', 'message' => $e->getMessage(), 'trace' => $e->getTraceAsString()] );
-            throw new Error( $e->getMessage(), null, null, null, null, $e );
+            throw new Error( config( 'app.debug' ) ? $e->getMessage() : 'AI service error', null, null, null, null, $e );
         }
     }
 }
